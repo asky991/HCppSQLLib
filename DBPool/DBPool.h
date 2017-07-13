@@ -31,9 +31,43 @@ typedef	unsigned int SOCKET;
 #define MAX_ESCAPE_STRING_LEN	10240
 
 
+#define HAVE_STRUCT_TIMESPEC
+#include <pthread.h>
+#ifdef _WIN32
+#pragma comment(lib,"lib/x86/pthreadVC2.lib")  
+#elif _WIN64
+#pragma comment(lib,"lib/x64/pthreadVC2.lib") 
+#endif // WIN32
 
 
+class CThreadNotify
+{
+public:
+	CThreadNotify()
+	{
+		pthread_mutexattr_init(&m_mutexattr);
+		pthread_mutexattr_settype(&m_mutexattr, PTHREAD_MUTEX_RECURSIVE);
+		pthread_mutex_init(&m_mutex, &m_mutexattr);
 
+		pthread_cond_init(&m_cond, NULL);
+	}
+	~CThreadNotify()
+	{
+		pthread_mutexattr_destroy(&m_mutexattr);
+		pthread_mutex_destroy(&m_mutex);
+
+		pthread_cond_destroy(&m_cond);
+	}
+	void Lock() { pthread_mutex_lock(&m_mutex); }
+	void Unlock() { pthread_mutex_unlock(&m_mutex); }
+	void Wait() { pthread_cond_wait(&m_cond, &m_mutex); }
+	void Signal() { pthread_cond_signal(&m_cond); }
+private:
+	pthread_mutex_t 	m_mutex;
+	pthread_mutexattr_t	m_mutexattr;
+
+	pthread_cond_t 		m_cond;
+};
 
 class CResultSet {
 public:
@@ -125,7 +159,7 @@ private:
 	int			m_db_cur_conn_cnt;
 	int 		m_db_max_conn_cnt;
 	list<CDBConn*>	m_free_list;
-	mutex m_mutex;
+	CThreadNotify	m_free_notify;
 };
 
 // manage db pool (master for write and slave for read)
